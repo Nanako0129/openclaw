@@ -30,13 +30,16 @@ export type ToolPolicyPipelineStep = {
   policy: ToolPolicyLike | undefined;
   label: string;
   stripPluginOnlyAllowlist?: boolean;
+  suppressUnavailableCoreToolWarning?: boolean;
 };
 
 export function buildDefaultToolPolicyPipelineSteps(params: {
   profilePolicy?: ToolPolicyLike;
   profile?: string;
+  profileAlsoAllow?: string[];
   providerProfilePolicy?: ToolPolicyLike;
   providerProfile?: string;
+  providerProfileAlsoAllow?: string[];
   globalPolicy?: ToolPolicyLike;
   globalProviderPolicy?: ToolPolicyLike;
   agentPolicy?: ToolPolicyLike;
@@ -52,6 +55,8 @@ export function buildDefaultToolPolicyPipelineSteps(params: {
       policy: params.profilePolicy,
       label: profile ? `tools.profile (${profile})` : "tools.profile",
       stripPluginOnlyAllowlist: true,
+      suppressUnavailableCoreToolWarning:
+        !Array.isArray(params.profileAlsoAllow) || params.profileAlsoAllow.length === 0,
     },
     {
       policy: params.providerProfilePolicy,
@@ -59,6 +64,9 @@ export function buildDefaultToolPolicyPipelineSteps(params: {
         ? `tools.byProvider.profile (${providerProfile})`
         : "tools.byProvider.profile",
       stripPluginOnlyAllowlist: true,
+      suppressUnavailableCoreToolWarning:
+        !Array.isArray(params.providerProfileAlsoAllow) ||
+        params.providerProfileAlsoAllow.length === 0,
     },
     { policy: params.globalPolicy, label: "tools.allow", stripPluginOnlyAllowlist: true },
     {
@@ -115,7 +123,7 @@ export function applyToolPolicyPipeline(params: {
         const otherEntries = resolved.unknownAllowlist.filter((entry) => !isKnownCoreToolId(entry));
         if (
           !shouldSuppressUnavailableCoreToolWarning({
-            label: step.label,
+            suppressUnavailableCoreToolWarning: step.suppressUnavailableCoreToolWarning === true,
             hasGatedCoreEntries: gatedCoreEntries.length > 0,
             hasOtherEntries: otherEntries.length > 0,
           })
@@ -141,17 +149,18 @@ export function applyToolPolicyPipeline(params: {
 }
 
 function shouldSuppressUnavailableCoreToolWarning(params: {
-  label: string;
+  suppressUnavailableCoreToolWarning: boolean;
   hasGatedCoreEntries: boolean;
   hasOtherEntries: boolean;
 }): boolean {
-  if (!params.hasGatedCoreEntries || params.hasOtherEntries) {
+  if (
+    !params.suppressUnavailableCoreToolWarning ||
+    !params.hasGatedCoreEntries ||
+    params.hasOtherEntries
+  ) {
     return false;
   }
-  return (
-    params.label.startsWith("tools.profile (") ||
-    params.label.startsWith("tools.byProvider.profile (")
-  );
+  return true;
 }
 
 function describeUnknownAllowlistSuffix(params: {
