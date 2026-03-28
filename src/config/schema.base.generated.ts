@@ -13812,6 +13812,7 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     },
     "agents.defaults.imageTimeoutSeconds": {
       label: "Image Timeout (sec)",
+      help: "Timeout in seconds for image-tool analysis requests before OpenClaw aborts the provider call (default: 30). Raise this for slower image-analysis providers while leaving the field unset to keep existing behavior.",
       tags: ["performance", "media"],
     },
     "agents.defaults.imageGenerationModel.primary": {
