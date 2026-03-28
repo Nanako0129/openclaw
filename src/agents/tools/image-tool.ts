@@ -43,6 +43,7 @@ const ANTHROPIC_IMAGE_PRIMARY = "anthropic/claude-opus-4-6";
 const ANTHROPIC_IMAGE_FALLBACK = "anthropic/claude-opus-4-5";
 const DEFAULT_MAX_IMAGES = 20;
 const DEFAULT_IMAGE_TIMEOUT_MS = 30_000;
+const MAX_SET_TIMEOUT_MS = 2_147_483_647;
 
 const imageToolProviderDeps = {
   buildProviderRegistry,
@@ -81,7 +82,7 @@ function resolveImageToolTimeoutMs(cfg?: OpenClawConfig): number {
   if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) {
     return DEFAULT_IMAGE_TIMEOUT_MS;
   }
-  return Math.floor(seconds * 1000);
+  return Math.min(Math.floor(seconds * 1000), MAX_SET_TIMEOUT_MS);
 }
 
 /**

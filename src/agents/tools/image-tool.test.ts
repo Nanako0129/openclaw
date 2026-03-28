@@ -1346,4 +1346,15 @@ describe("image tool timeout config", () => {
     };
     expect(__testing.resolveImageToolTimeoutMs(cfg)).toBe(90_000);
   });
+
+  it("clamps image timeout to the maximum safe Node timer delay", () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        defaults: {
+          imageTimeoutSeconds: 3_000_000,
+        },
+      },
+    };
+    expect(__testing.resolveImageToolTimeoutMs(cfg)).toBe(2_147_483_647);
+  });
 });
