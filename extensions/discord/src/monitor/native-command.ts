@@ -76,6 +76,7 @@ import {
   resolveDiscordNativeChoiceContext,
   shouldOpenDiscordModelPickerFromCommand,
   type DiscordCommandArgContext,
+  type DispatchDiscordCommandInteractionResult,
   type DiscordModelPickerContext,
 } from "./native-command-ui.js";
 import { resolveDiscordSenderIdentity } from "./sender-identity.js";
@@ -688,7 +689,7 @@ async function dispatchDiscordCommandInteraction(params: {
   preferFollowUp: boolean;
   threadBindings: ThreadBindingManager;
   suppressReplies?: boolean;
-}) {
+}): Promise<DispatchDiscordCommandInteractionResult> {
   const {
     interaction,
     prompt,
@@ -719,7 +720,7 @@ async function dispatchDiscordCommandInteraction(params: {
   const useAccessGroups = cfg.commands?.useAccessGroups !== false;
   const user = interaction.user;
   if (!user) {
-    return false;
+    return { accepted: false };
   }
   const sender = resolveDiscordSenderIdentity({ author: user, pluralkitInfo: null });
   const channel = interaction.channel;
@@ -803,11 +804,11 @@ async function dispatchDiscordCommandInteraction(params: {
     : null;
   if (channelConfig?.enabled === false) {
     await respond("This channel is disabled.");
-    return false;
+    return { accepted: false };
   }
   if (interaction.guild && channelConfig?.allowed === false) {
     await respond("This channel is not allowed.");
-    return false;
+    return { accepted: false };
   }
   if (useAccessGroups && interaction.guild) {
     const channelAllowlistConfigured =
@@ -826,7 +827,7 @@ async function dispatchDiscordCommandInteraction(params: {
     });
     if (!allowByPolicy) {
       await respond("This channel is not allowed.");
-      return false;
+      return { accepted: false };
     }
   }
   const dmEnabled = discordConfig?.dm?.enabled ?? true;
@@ -835,7 +836,7 @@ async function dispatchDiscordCommandInteraction(params: {
   if (isDirectMessage) {
     if (!dmEnabled || dmPolicy === "disabled") {
       await respond("Discord DMs are disabled.");
-      return false;
+      return { accepted: false };
     }
     const dmAccess = await resolveDiscordDmCommandAccess({
       accountId,
@@ -873,7 +874,7 @@ async function dispatchDiscordCommandInteraction(params: {
           await respond("You are not authorized to use this command.", { ephemeral: true });
         },
       });
-      return false;
+      return { accepted: false };
     }
   }
   const groupDmAccess = resolveDiscordNativeGroupDmAccess({
@@ -890,7 +891,7 @@ async function dispatchDiscordCommandInteraction(params: {
         ? "Discord group DMs are disabled."
         : "This group DM is not allowed.",
     );
-    return false;
+    return { accepted: false };
   }
   if (!isDirectMessage) {
     const { hasAccessRestrictions, memberAllowed } = resolveDiscordMemberAccessState({
@@ -923,7 +924,7 @@ async function dispatchDiscordCommandInteraction(params: {
     });
     if (!commandAuthorized) {
       await respond("You are not authorized to use this command.", { ephemeral: true });
-      return false;
+      return { accepted: false };
     }
   }
 
@@ -955,7 +956,7 @@ async function dispatchDiscordCommandInteraction(params: {
           ephemeral: true,
         }),
       );
-      return true;
+      return { accepted: true };
     }
     await safeDiscordInteractionCall("interaction reply", () =>
       interaction.reply({
@@ -964,7 +965,7 @@ async function dispatchDiscordCommandInteraction(params: {
         ephemeral: true,
       }),
     );
-    return true;
+    return { accepted: true };
   }
 
   const pluginMatch = matchPluginCommandImpl(prompt);
@@ -989,7 +990,7 @@ async function dispatchDiscordCommandInteraction(params: {
     }));
   if (pluginMatch) {
     if (suppressReplies) {
-      return true;
+      return { accepted: true };
     }
     const channelId = rawChannelId || "unknown";
     const isThreadChannel =
@@ -1022,7 +1023,7 @@ async function dispatchDiscordCommandInteraction(params: {
     });
     if (!hasRenderableReplyPayload(pluginReply)) {
       await respond("Done.");
-      return true;
+      return { accepted: true, effectiveRoute };
     }
     await deliverDiscordInteractionReply({
       interaction,
@@ -1034,7 +1035,7 @@ async function dispatchDiscordCommandInteraction(params: {
       preferFollowUp,
       chunkMode: resolveChunkMode(cfg, "discord", accountId),
     });
-    return true;
+    return { accepted: true, effectiveRoute };
   }
 
   const pickerCommandContext = shouldOpenDiscordModelPickerFromCommand({
@@ -1052,7 +1053,7 @@ async function dispatchDiscordCommandInteraction(params: {
       preferFollowUp,
       safeInteractionCall: safeDiscordInteractionCall,
     });
-    return true;
+    return { accepted: true };
   }
 
   const isGuild = Boolean(interaction.guild);
@@ -1066,7 +1067,7 @@ async function dispatchDiscordCommandInteraction(params: {
         `discord native command: configured ACP binding unavailable for channel ${configuredBinding.record.conversation.conversationId}: ${routeState.bindingReadiness.error}`,
       );
       await respond("Configured ACP binding is unavailable right now. Please try again.");
-      return false;
+      return { accepted: false };
     }
   }
   const boundSessionKey = routeState.boundSessionKey;
@@ -1182,7 +1183,7 @@ async function dispatchDiscordCommandInteraction(params: {
       await interaction.reply(payload);
     });
   }
-  return true;
+  return { accepted: true, effectiveRoute };
 }
 
 export function createDiscordCommandArgFallbackButton(params: DiscordCommandArgContext): Button {
