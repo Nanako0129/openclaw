@@ -869,10 +869,14 @@ export async function handleDiscordModelPickerInteraction(params: {
           route,
           data: pickerData,
         });
-        persisted = directlyPersisted && effectiveModelRef === resolvedModelRef;
+        persisted = effectiveModelRef === resolvedModelRef;
         if (!persisted) {
           logVerbose(
             `discord: direct session override persist failed — expected ${resolvedModelRef} but read ${effectiveModelRef} from session key ${route.sessionKey}`,
+          );
+        } else if (!directlyPersisted) {
+          logVerbose(
+            `discord: direct session override persist became a no-op because ${resolvedModelRef} was already present on re-read for session key ${route.sessionKey}`,
           );
         }
       } catch (error) {

@@ -11,6 +11,7 @@ import {
   saveSessionStore,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/config-runtime";
+import * as configRuntimeModule from "openclaw/plugin-sdk/config-runtime";
 import * as dispatcherModule from "openclaw/plugin-sdk/reply-dispatch-runtime";
 import * as globalsModule from "openclaw/plugin-sdk/runtime-env";
 import * as commandTextModule from "openclaw/plugin-sdk/text-runtime";
@@ -648,6 +649,78 @@ describe("Discord model picker interactions", () => {
     expect(
       store["agent:worker:subagent:bound"]?.authProfileOverrideCompactionCount,
     ).toBeUndefined();
+  });
+
+  it("accepts the selected model when the fallback re-read matches after a no-op persist", async () => {
+    const context = createModelPickerContext();
+    context.threadBindings = createBoundThreadBindingManager({
+      accountId: "default",
+      threadId: "thread-bound",
+      targetSessionKey: "agent:worker:subagent:bound",
+      agentId: "worker",
+    });
+    const pickerData = createDefaultModelPickerData();
+    const modelCommand = createModelCommandDefinition();
+    const storePath = resolveStorePath(context.cfg.session?.store, { agentId: "worker" });
+    await saveSessionStore(storePath, {
+      "agent:worker:subagent:bound": {
+        updatedAt: Date.now(),
+        sessionId: "bound-session",
+      },
+    });
+
+    const realUpdateSessionStore = configRuntimeModule.updateSessionStore;
+    let rewroteBeforeFallback = false;
+    vi.spyOn(configRuntimeModule, "updateSessionStore").mockImplementation(
+      async (targetStorePath, mutator) => {
+        if (!rewroteBeforeFallback && targetStorePath === storePath) {
+          rewroteBeforeFallback = true;
+          await realUpdateSessionStore(storePath, (store) => {
+            const entry = store["agent:worker:subagent:bound"];
+            if (!entry) {
+              return;
+            }
+            entry.providerOverride = "openai";
+            entry.modelOverride = "gpt-4o";
+          });
+        }
+        return await realUpdateSessionStore(targetStorePath, mutator);
+      },
+    );
+
+    vi.spyOn(modelPickerModule, "loadDiscordModelPickerData").mockResolvedValue(pickerData);
+    mockModelCommandPipeline(modelCommand);
+    createDispatchSpy();
+
+    const select = createDiscordModelPickerFallbackSelect(context);
+    const selectInteraction = createInteraction({
+      userId: "owner",
+      values: ["gpt-4o"],
+    });
+    selectInteraction.channel = {
+      type: ChannelType.PublicThread,
+      id: "thread-bound",
+    };
+    await select.run(
+      selectInteraction as unknown as PickerSelectInteraction,
+      createModelsViewSelectData(),
+    );
+
+    const button = createDiscordModelPickerFallbackButton(context);
+    const submitInteraction = createInteraction({ userId: "owner" });
+    submitInteraction.channel = {
+      type: ChannelType.PublicThread,
+      id: "thread-bound",
+    };
+
+    await button.run(
+      submitInteraction as unknown as PickerButtonInteraction,
+      createModelsViewSubmitData(),
+    );
+
+    expect(JSON.stringify(submitInteraction.followUp.mock.calls[0]?.[0])).toContain(
+      "✅ Model set to openai/gpt-4o.",
+    );
   });
 
   it("loads model picker data from the effective bound route", async () => {
