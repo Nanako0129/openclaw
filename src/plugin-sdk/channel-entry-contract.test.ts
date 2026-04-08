@@ -85,7 +85,7 @@ describe("loadBundledEntryExportSync", () => {
     }
   });
 
-  it("falls back from src setup and secret specifiers to packaged public artifacts", () => {
+  it("loads packaged telegram setup sidecars from dist-facing api modules", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-channel-entry-contract-"));
     tempDirs.push(tempRoot);
 
@@ -93,41 +93,42 @@ describe("loadBundledEntryExportSync", () => {
     fs.mkdirSync(pluginRoot, { recursive: true });
 
     const importerPath = path.join(pluginRoot, "setup-entry.js");
-    const channelPluginApiPath = path.join(pluginRoot, "channel-plugin-api.js");
-    const secretContractApiPath = path.join(pluginRoot, "secret-contract-api.js");
+    const setupApiPath = path.join(pluginRoot, "setup-plugin-api.js");
+    const secretsApiPath = path.join(pluginRoot, "secret-contract-api.js");
+
     fs.writeFileSync(importerPath, "export default {};\n", "utf8");
     fs.writeFileSync(
-      channelPluginApiPath,
-      "export const telegramSetupPlugin = { id: 'telegram-setup' };\n",
+      setupApiPath,
+      'export const telegramSetupPlugin = { id: "telegram" };\n',
       "utf8",
     );
     fs.writeFileSync(
-      secretContractApiPath,
+      secretsApiPath,
       [
-        "export const secretTargetRegistryEntries = ['botToken'];",
-        "export function collectRuntimeConfigAssignments() { return undefined; }",
+        "export const collectRuntimeConfigAssignments = () => [];",
+        "export const secretTargetRegistryEntries = [];",
+        'export const channelSecrets = { TELEGRAM_TOKEN: { env: "TELEGRAM_TOKEN" } };',
+        "",
       ].join("\n"),
       "utf8",
     );
 
     expect(
       loadBundledEntryExportSync<{ id: string }>(pathToFileURL(importerPath).href, {
-        specifier: "./src/channel.setup.js",
+        specifier: "./setup-plugin-api.js",
         exportName: "telegramSetupPlugin",
       }),
-    ).toEqual({ id: "telegram-setup" });
+    ).toEqual({ id: "telegram" });
 
     expect(
-      loadBundledEntryExportSync<{
-        secretTargetRegistryEntries: string[];
-        collectRuntimeConfigAssignments: () => undefined;
-      }>(pathToFileURL(importerPath).href, {
-        specifier: "./src/secret-contract.js",
+      loadBundledEntryExportSync<Record<string, unknown>>(pathToFileURL(importerPath).href, {
+        specifier: "./secret-contract-api.js",
         exportName: "channelSecrets",
       }),
-    ).toMatchObject({
-      secretTargetRegistryEntries: ["botToken"],
-      collectRuntimeConfigAssignments: expect.any(Function),
+    ).toEqual({
+      TELEGRAM_TOKEN: {
+        env: "TELEGRAM_TOKEN",
+      },
     });
   });
 });
